@@ -5,26 +5,37 @@
     <title>Humanitarian Response Dashboard</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        /* CSS stays the same as before to keep the tidy look */
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
         .dashboard-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; max-width: 1300px; margin: 0 auto; }
-        header { grid-column: span 5; background: #004a99; color: white; padding: 15px; border-radius: 8px; }
-        .filter-panel { grid-column: span 5; background: white; padding: 15px; border-radius: 8px; display: flex; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        header { grid-column: span 5; background: #004a99; color: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .filter-panel { grid-column: span 5; background: white; padding: 15px; border-radius: 8px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         select { padding: 8px; flex: 1; border: 1px solid #ddd; border-radius: 4px; }
         .kpi-card { background: white; padding: 15px; border-radius: 8px; text-align: center; border-top: 4px solid #004a99; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .kpi-card h3 { margin: 0; font-size: 12px; color: #666; text-transform: uppercase; }
-        .kpi-card div { font-size: 22px; font-weight: bold; color: #004a99; margin-top: 5px; }
+        .kpi-card div { font-size: 24px; font-weight: bold; color: #004a99; margin-top: 5px; }
         .chart-container { grid-column: span 2; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .chart-container.wide { grid-column: span 3; }
-        .chart-title { font-weight: bold; margin-bottom: 10px; color: #444; }
+        .chart-title { font-weight: bold; margin-bottom: 15px; color: #444; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
-        th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; cursor: pointer; }
+        th { background: #f8f9fa; padding: 12px; text-align: left; border-bottom: 2px solid #ddd; cursor: pointer; }
         td { padding: 10px; border-bottom: 1px solid #eee; }
-        #tooltip { position: absolute; visibility: hidden; background: #333; color: white; padding: 5px; border-radius: 4px; font-size: 12px; }
         
-        /* Legend styling for Chart (d) */
+        /* TOOLTIP STYLE: Needs to be 'absolute' and 'hidden' by default */
+        #tooltip { 
+            position: absolute; 
+            visibility: hidden; 
+            background: rgba(40, 44, 52, 0.95); 
+            color: white; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            pointer-events: none; /* Crucial: stops the tooltip from flickering under the mouse */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            line-height: 1.4;
+        }
         .legend-item { display: flex; align-items: center; font-size: 11px; margin-bottom: 4px; }
-        .legend-color { width: 12px; height: 12px; margin-right: 5px; border-radius: 2px; }
+        .legend-color { width: 12px; height: 12px; margin-right: 8px; border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -57,19 +68,19 @@
         <div id="lineChart"></div>
     </div>
     <div class="chart-container wide">
-        <div class="chart-title">(c) Top 10 Township Gaps (%)</div>
+        <div class="chart-title">(c) Top 8 Township Gaps (%)</div>
         <div id="rankChart"></div>
     </div>
     <div class="chart-container">
         <div class="chart-title">(d) Sector Distribution</div>
         <div style="display: flex; align-items: center;">
             <div id="pieChart" style="flex: 1;"></div>
-            <div id="pieLegend" style="width: 120px;"></div>
+            <div id="pieLegend" style="width: 130px;"></div>
         </div>
     </div>
 
     <div class="chart-container wide" style="grid-column: span 5;">
-        <div class="chart-title">Data Table (15 Rows)</div>
+        <div class="chart-title">Data Table (Top 15 Rows)</div>
         <table id="dataTable">
             <thead>
                 <tr>
@@ -88,8 +99,22 @@
     let allData = [];
     let sortBy = 'date';
 
+    // --- TOOLTIP LOGIC ENGINE ---
+    const tooltip = d3.select("#tooltip");
+
+    // Function to make tooltip visible and set content
+    const showTooltip = (event, content) => {
+        tooltip.style("visibility", "visible")
+               .html(content)
+               .style("top", (event.pageY - 15) + "px")
+               .style("left", (event.pageX + 15) + "px");
+    };
+
+    // Function to hide tooltip
+    const hideTooltip = () => tooltip.style("visibility", "hidden");
+
     d3.csv("humanitarian_response_dataset.csv").then(function(data) {
-        data.forEach(function(d) {
+        data.forEach(d => {
             d.people_in_need = +d.people_in_need;
             d.people_reached = +d.people_reached;
             d.funding_required_usd = +d.funding_required_usd;
@@ -106,24 +131,24 @@
     });
 
     function fillDropdown(selector, column) {
-        let uniqueValues = [...new Set(allData.map(function(d) { return d[column]; }))].sort();
-        uniqueValues.forEach(function(val) {
-            d3.select(selector).append("option").text(val).attr("value", val);
-        });
+        let uniqueValues = [...new Set(allData.map(d => d[column]))].sort();
+        uniqueValues.forEach(val => d3.select(selector).append("option").text(val).attr("value", val));
     }
 
     function render() {
-        let countryVal = d3.select("#filtCountry").property("value");
-        let regionVal = d3.select("#filtRegion").property("value");
-        let sectorVal = d3.select("#filtSector").property("value");
-        let partnerVal = d3.select("#filtPartner").property("value");
+        let filters = {
+            c: d3.select("#filtCountry").property("value"),
+            r: d3.select("#filtRegion").property("value"),
+            s: d3.select("#filtSector").property("value"),
+            p: d3.select("#filtPartner").property("value")
+        };
 
-        let filteredData = allData.filter(function(d) {
-            return (countryVal === "all" || d.country === countryVal) &&
-                   (regionVal === "all" || d.state_region === regionVal) &&
-                   (sectorVal === "all" || d.sector === sectorVal) &&
-                   (partnerVal === "all" || d.partner === partnerVal);
-        });
+        let filteredData = allData.filter(d => 
+            (filters.c === "all" || d.country === filters.c) &&
+            (filters.r === "all" || d.state_region === filters.r) &&
+            (filters.s === "all" || d.sector === filters.s) &&
+            (filters.p === "all" || d.partner === filters.p)
+        );
 
         updateKPIs(filteredData);
         updateBarChart(filteredData);
@@ -134,28 +159,23 @@
     }
 
     function updateKPIs(data) {
-        let target = 0, reached = 0, req = 0, rec = 0;
-        data.forEach(function(d) {
-            target += d.people_in_need; reached += d.people_reached;
-            req += d.funding_required_usd; rec += d.funding_received_usd;
-        });
-        let gap = req > 0 ? ((req - rec) / req * 100) : 0;
+        let target = d3.sum(data, d => d.people_in_need), 
+            reached = d3.sum(data, d => d.people_reached),
+            req = d3.sum(data, d => d.funding_required_usd), 
+            rec = d3.sum(data, d => d.funding_received_usd);
+        
         d3.select("#kpiTarget").text(target.toLocaleString());
         d3.select("#kpiReached").text(reached.toLocaleString());
         d3.select("#kpiReq").text("$" + d3.format(".2s")(req));
         d3.select("#kpiRec").text("$" + d3.format(".2s")(rec));
-        d3.select("#kpiGap").text(gap.toFixed(1) + "%");
+        d3.select("#kpiGap").text((req > 0 ? ((req-rec)/req*100) : 0).toFixed(1) + "%");
     }
 
-    // --- CHART (A) UPDATED COLORS ---
     function updateBarChart(data) {
         d3.select("#barChart").html("");
         let svg = d3.select("#barChart").append("svg").attr("width", "100%").attr("height", 220);
-        
         let summary = d3.groups(data, d => d.sector).map(g => ({
-            sector: g[0], 
-            target: d3.sum(g[1], d => d.people_in_need),
-            reached: d3.sum(g[1], d => d.people_reached)
+            sector: g[0], target: d3.sum(g[1], d => d.people_in_need), reached: d3.sum(g[1], d => d.people_reached)
         })).slice(0, 5);
 
         let xScale = d3.scaleBand().domain(summary.map(d => d.sector)).range([50, 380]).padding(0.3);
@@ -164,98 +184,82 @@
         svg.append("g").attr("transform", "translate(0,160)").call(d3.axisBottom(xScale));
         svg.append("g").attr("transform", "translate(50,0)").call(d3.axisLeft(yScale).ticks(5, "s"));
 
-        summary.forEach(function(d) {
-            // New Orange for Targeted
-            svg.append("rect")
-                .attr("x", xScale(d.sector))
-                .attr("y", yScale(d.target))
-                .attr("width", xScale.bandwidth()/2)
-                .attr("height", 160 - yScale(d.target))
-                .attr("fill", "#ff8c00"); 
+        summary.forEach(d => {
+            // Added Mouse listeners to bars
+            svg.append("rect").attr("x", xScale(d.sector)).attr("y", yScale(d.target)).attr("width", xScale.bandwidth()/2).attr("height", 160-yScale(d.target)).attr("fill", "#ff8c00")
+                .on("mouseover", (e) => showTooltip(e, `<b>${d.sector}</b><br>Target: ${d.target.toLocaleString()}`))
+                .on("mousemove", (e) => showTooltip(e, `<b>${d.sector}</b><br>Target: ${d.target.toLocaleString()}`))
+                .on("mouseout", hideTooltip);
 
-            // New Dark Blue for Reached
-            svg.append("rect")
-                .attr("x", xScale(d.sector) + xScale.bandwidth()/2)
-                .attr("y", yScale(d.reached))
-                .attr("width", xScale.bandwidth()/2)
-                .attr("height", 160 - yScale(d.reached))
-                .attr("fill", "#004a99");
+            svg.append("rect").attr("x", xScale(d.sector) + xScale.bandwidth()/2).attr("y", yScale(d.reached)).attr("width", xScale.bandwidth()/2).attr("height", 160-yScale(d.reached)).attr("fill", "#004a99")
+                .on("mouseover", (e) => showTooltip(e, `<b>${d.sector}</b><br>Reached: ${d.reached.toLocaleString()}`))
+                .on("mousemove", (e) => showTooltip(e, `<b>${d.sector}</b><br>Reached: ${d.reached.toLocaleString()}`))
+                .on("mouseout", hideTooltip);
         });
     }
 
-    // --- CHART (B) FIXED OVERLAP ---
     function updateLineChart(data) {
         d3.select("#lineChart").html("");
         let svg = d3.select("#lineChart").append("svg").attr("width", "100%").attr("height", 240);
-        
-        let timeData = d3.groups(data, d => d.date.substring(0, 7))
-            .map(g => ({ date: d3.timeParse("%Y-%m")(g[0]), val: d3.sum(g[1], d => d.funding_received_usd) }))
-            .sort((a,b) => a.date - b.date);
-
+        let timeData = d3.groups(data, d => d.date.substring(0, 7)).map(g => ({ date: d3.timeParse("%Y-%m")(g[0]), val: d3.sum(g[1], d => d.funding_received_usd) })).sort((a,b) => a.date - b.date);
+        if(!timeData.length) return;
         let xScale = d3.scaleTime().domain(d3.extent(timeData, d => d.date)).range([60, 550]);
         let yScale = d3.scaleLinear().domain([0, d3.max(timeData, d => d.val)]).range([160, 20]);
 
-        // Fix: Rotate X-Axis text so they don't overlap
-        svg.append("g")
-            .attr("transform", "translate(0,160)")
-            .call(d3.axisBottom(xScale).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat("%b %y")))
-            .selectAll("text")
-            .attr("transform", "rotate(-45)")
-            .style("text-anchor", "end");
-
+        svg.append("g").attr("transform", "translate(0,160)").call(d3.axisBottom(xScale).tickFormat(d3.timeFormat("%b %y"))).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
         svg.append("g").attr("transform", "translate(60,0)").call(d3.axisLeft(yScale).ticks(5, "s"));
 
         let line = d3.line().x(d => xScale(d.date)).y(d => yScale(d.val));
         svg.append("path").datum(timeData).attr("fill", "none").attr("stroke", "#004a99").attr("stroke-width", 2).attr("d", line);
+
+        // Tooltip for Line Chart "Dots"
+        svg.selectAll("circle").data(timeData).enter().append("circle").attr("cx", d => xScale(d.date)).attr("cy", d => yScale(d.val)).attr("r", 4).attr("fill", "#004a99")
+            .on("mouseover", (e, d) => showTooltip(e, `<b>${d3.timeFormat("%B %Y")(d.date)}</b><br>Rec: $${d.val.toLocaleString()}`))
+            .on("mousemove", (e, d) => showTooltip(e, `<b>${d3.timeFormat("%B %Y")(d.date)}</b><br>Rec: $${d.val.toLocaleString()}`))
+            .on("mouseout", hideTooltip);
     }
 
     function updateRankChart(data) {
         d3.select("#rankChart").html("");
         let svg = d3.select("#rankChart").append("svg").attr("width", "100%").attr("height", 220);
         let townshipData = d3.groups(data, d => d.township).map(g => {
-            let r = d3.sum(g[1], d => d.funding_required_usd);
-            let f = d3.sum(g[1], d => d.funding_received_usd);
+            let r = d3.sum(g[1], d => d.funding_required_usd), f = d3.sum(g[1], d => d.funding_received_usd);
             return { name: g[0], gap: r > 0 ? (r-f)/r*100 : 0 };
         }).sort((a,b) => b.gap - a.gap).slice(0, 8);
 
         let xScale = d3.scaleLinear().domain([0, 100]).range([100, 550]);
         let yScale = d3.scaleBand().domain(townshipData.map(d => d.name)).range([20, 180]).padding(0.2);
         svg.append("g").attr("transform", "translate(100,0)").call(d3.axisLeft(yScale));
-        svg.selectAll("rect").data(townshipData).enter().append("rect")
-            .attr("x", 100).attr("y", d => yScale(d.name)).attr("width", d => xScale(d.gap)-100).attr("height", yScale.bandwidth()).attr("fill", "#dc3545");
+        svg.selectAll("rect").data(townshipData).enter().append("rect").attr("x", 100).attr("y", d => yScale(d.name)).attr("width", d => xScale(d.gap)-100).attr("height", yScale.bandwidth()).attr("fill", "#dc3545")
+            .on("mouseover", (e, d) => showTooltip(e, `<b>${d.name}</b><br>Gap: ${d.gap.toFixed(1)}%`))
+            .on("mousemove", (e, d) => showTooltip(e, `<b>${d.name}</b><br>Gap: ${d.gap.toFixed(1)}%`))
+            .on("mouseout", hideTooltip);
     }
 
-    // --- CHART (D) ADDED LEGEND ---
     function updatePieChart(data) {
-        d3.select("#pieChart").html("");
-        d3.select("#pieLegend").html(""); // Clear old legend
-        
+        d3.select("#pieChart").html(""); d3.select("#pieLegend").html("");
         let svg = d3.select("#pieChart").append("svg").attr("width", 160).attr("height", 160).append("g").attr("transform", "translate(80,80)");
-        
         let counts = Array.from(d3.rollup(data, v => v.length, d => d.sector));
-        let colors = d3.scaleOrdinal(d3.schemeTableau10);
-        let pie = d3.pie().value(d => d[1]);
-        let arc = d3.arc().innerRadius(30).outerRadius(70);
+        let colors = d3.scaleOrdinal(d3.schemeTableau10), pie = d3.pie().value(d => d[1]), arc = d3.arc().innerRadius(35).outerRadius(75);
 
-        svg.selectAll("path").data(pie(counts)).enter().append("path").attr("d", arc).attr("fill", (d, i) => colors(i));
+        svg.selectAll("path").data(pie(counts)).enter().append("path").attr("d", arc).attr("fill", (d, i) => colors(i))
+            .on("mouseover", (e, d) => showTooltip(e, `<b>${d.data[0]}</b><br>Count: ${d.data[1]}`))
+            .on("mousemove", (e, d) => showTooltip(e, `<b>${d.data[0]}</b><br>Count: ${d.data[1]}`))
+            .on("mouseout", hideTooltip);
 
-        // Create the Legend manually
-        counts.forEach(function(d, i) {
+        counts.forEach((d, i) => {
             let item = d3.select("#pieLegend").append("div").attr("class", "legend-item");
             item.append("div").attr("class", "legend-color").style("background", colors(i));
-            item.append("span").text(d[0]); // Sector name
+            item.append("span").text(d[0]);
         });
     }
 
     function updateTable(data) {
         data.sort((a, b) => d3.descending(a[sortBy], b[sortBy]));
         let tbody = d3.select("#dataTable tbody").html("");
-        data.slice(0, 15).forEach(function(d) {
+        data.slice(0, 15).forEach(d => {
             let row = tbody.append("tr");
-            row.append("td").text(d.date);
-            row.append("td").text(d.state_region);
-            row.append("td").text(d.sector);
-            row.append("td").text(d.funding_gap.toFixed(1) + "%");
+            row.append("td").text(d.date); row.append("td").text(d.state_region); row.append("td").text(d.sector); row.append("td").text(d.funding_gap.toFixed(1) + "%");
         });
     }
 
